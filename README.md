@@ -8,7 +8,7 @@ git clone git@github.com:Zjoswaa/JetBrains-Unity-Project-Analyzer.git
 cd JetBrains-Unity-Project-Analyzer/Application/
 ```
 ### Run
-To run using dotnet, the provided test cases from the solution are included in this repository at `JetBrains-Unity-Project-Analyzer/TestCases/TestCase01/`, this path can be used as `unity_project_path`.
+To run using dotnet, the provided test cases from the solution are included in this repository at `JetBrains-Unity-Project-Analyzer/TestCases/TestCase[num]/`, this path can be used as `unity_project_path`.
 ```bash
 dotnet run <unity_project_path> <output_folder_path>
 ```
