@@ -7,17 +7,20 @@ public class UnityScene {
     public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
     public readonly Dictionary<object, object?> SceneDict = new();
 
-    public UnityScene(string path) {
+    public UnityScene(string path, string? content = null) {
         Path = path;
+
+        if (content is null) {
+            content = File.ReadAllText(path);
+        }
         
-        string allText = File.ReadAllText(path);
         var yamlDeserializer = new DeserializerBuilder().Build();
         
         // Split the whole file text into groups, every group (except from the first one), will contain the following:
         // - Tag (eg. !u!123)
         // - ID (eg. &123)
         // - The actual YAML text
-        string[] groups = allText.Split("--- ");
+        string[] groups = content.Split("--- ");
         
         for (int i = 1; i < groups.Length; i++) {
             // Get the tag of this group, which is always the first line of the group
@@ -35,32 +38,27 @@ public class UnityScene {
             SceneDict[groupTag] = obj;
         }
         
-        Console.ForegroundColor = ConsoleColor.Blue;
         Console.WriteLine($"Loaded Unity scene: {path}");
-        Console.ResetColor();
     }
 
     public void Print() {
-        Console.ForegroundColor = ConsoleColor.Blue;
-        Console.WriteLine(Name);
-        Console.ResetColor();
         Util.PrintDictionary(SceneDict);
     }
     
-    public static List<UnityScene> GetAllScenes(string rootDir) {
-        List<UnityScene> scenes = new List<UnityScene>();
-        foreach (string filePath in Directory.GetFiles(rootDir)) {
-            // If the path ends with ".unity", like "/home/user/TestCase01/Assets/Scenes/SampleScene.unity" for example
-            if (filePath.EndsWith(".unity")) {
-                // Add it to the collection
-                scenes.Add(new UnityScene(filePath));
-            }
-        }
-
-        return scenes;
+    public static async Task<List<UnityScene>> GetAllScenesAsync(string rootDir) {
+        // If the path ends with ".unity", like "/home/user/TestCase02/Assets/Scenes/SampleScene.unity" for example
+        var files = Directory.GetFiles(rootDir, "*.unity");
+        // Read the file content as tasks, the result is saved in the task object
+        var tasks = files.Select(async filePath => {
+            var content = await File.ReadAllTextAsync(filePath);
+            return new UnityScene(filePath, content);
+        });
+        
+        // Wait for all tasks to finish and return the contents as a list
+        return (await Task.WhenAll(tasks)).ToList();
     }
-
-    public void DumpHierarchyToFile(string outputFile) {
+    
+    public async Task DumpHierarchyToFileAsync(string outputFile) {
         // If the file already exists, find a new name by adding ".1", ".2" to the extension.
         if (File.Exists(outputFile)) {
             int n = 1;
@@ -71,29 +69,25 @@ public class UnityScene {
             }
             outputFile = newOutputFile;
         }
-        // this.OutputFile = outputFile;
-
-        Console.ForegroundColor = ConsoleColor.Yellow;
+        
+        using var stream = new StreamWriter(File.Open(outputFile, FileMode.CreateNew, FileAccess.Write));
+        
         Console.WriteLine($"Dumping {System.IO.Path.GetFileName(this.Path)} to {outputFile}");
-        Console.ResetColor();
         
         // Get the root object ID's from the "SceneRoots" object
-        List<string> rootIDs = GetSceneRootObjectIDs();
+        var rootIDs = GetSceneRootObjectIDs();
         // For every root object, dump it to the output, DumpObjectName will recursively also dump its children.
-        foreach (var ID in rootIDs) {
-            object? obj = GetSceneObjectByID(ID);
-            DumpObjectName(obj, 0, outputFile);
+        foreach (var id in rootIDs) {
+            await DumpObjectNameAsync(GetSceneObjectByID(id), 0, stream);
         }
         
-        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Done");
-        Console.ResetColor();
     }
     
     // Get the Transform component of the object and get its m_GameObject field
     // Then find the GameObject with that ID and write its name to the output
     // If the transform has children, recursively visit every child of that Transform and do the same.
-    private void DumpObjectName(object? obj, int depth, string outputFile) {
+    private async Task DumpObjectNameAsync(object? obj, int depth, StreamWriter writer) {
         // First check if the input object is a dictionary that represents a "Transform"
         if (obj is not Dictionary<object, object> objDict || !objDict.TryGetValue("Transform", out var transformObj) || transformObj is not Dictionary<object, object> transformDict) {
             return;
@@ -112,10 +106,7 @@ public class UnityScene {
                 nameObj is string nameStr)
             {
                 // Write the name to the output
-                using (var w = File.AppendText(outputFile)) {
-                    w.Write(new string('-', depth));
-                    w.WriteLine(nameStr);
-                }
+                await writer.WriteLineAsync($"{new string('-', depth)}{nameStr}");
             }
         }
 
@@ -124,7 +115,7 @@ public class UnityScene {
         if (transformDict.TryGetValue("m_Children", out object? childrenObj) && childrenObj is List<object> childIDs) {
             foreach (Dictionary<object, object> childID in childIDs) {
                 if (childID.TryGetValue("fileID", out var childFileID) && childFileID is string childIdStr) {
-                    DumpObjectName(GetSceneObjectByID(childIdStr), depth + 2, outputFile);
+                    await DumpObjectNameAsync(GetSceneObjectByID(childIdStr), depth + 2, writer);
                 }
             }
         }

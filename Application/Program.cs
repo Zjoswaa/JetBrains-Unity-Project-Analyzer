@@ -3,7 +3,7 @@
 namespace Application;
 
 class Program {
-    public static void Main(string[] args) {
+    public static async Task Main(string[] args) {
         // Make sure at least 2 arguments are provided
         if (args.Length < 2) {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -12,7 +12,7 @@ class Program {
             Console.ResetColor();
             return;
         }
-
+    
         // Make sure the input and output path exist
         if (!Path.Exists(args[0])) {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -25,19 +25,20 @@ class Program {
             Console.ResetColor();
             return;
         }
+
+        // Get all scenes asynchronously
+        List<UnityScene> scenes = await UnityScene.GetAllScenesAsync(Path.Combine(args[0], "Assets/Scenes/"));
         
-        // Get all the scenes from the Assets/Scenes/ directory
-        List<UnityScene> scenes = UnityScene.GetAllScenes(Path.Combine(args[0], "Assets/Scenes/"));
-        // Dump every collected scene to an output file
-        foreach (var scene in scenes) {
-            scene.DumpHierarchyToFile(Path.Combine(args[1], Path.GetFileName(scene.Path)) + ".dump");
-        }
-        
-        // Get all the scripts from the Assets/Scripts/ directory
-        List<UnityScript> scripts = UnityScript.GetAllScripts(Path.Combine(args[0], "Assets/Scripts/"));
-        // Get all the scripts that are not used in any of the scenes
-        List<UnityScript> unusedScripts = Util.GetUnusedScripts(scenes, scripts);
-        // Write the result to an output file
-        Util.WriteScriptsInfoToFile(unusedScripts, Path.Combine(args[1], "UnusedScripts.csv"), args[0]);
+        // Wait for all the tasks (dumping the file hierarchies) to finish
+        await Task.WhenAll(scenes.Select(scene => scene.DumpHierarchyToFileAsync(Path.Combine(args[1], Path.GetFileName(scene.Path)) + ".dump")));
+
+        // Get all scripts asynchrinously
+        List<UnityScript> scripts = await UnityScript.GetAllScriptsAsync(Path.Combine(args[0], "Assets/Scripts/"));
+
+        // Get all unused scripts asynchronously
+        var unusedScripts = await Util.GetUnusedScriptsAsync(scenes, scripts);
+
+        // Write the unused scripts to the output asynchronously
+        await Util.WriteScriptsInfoToFileAsync(unusedScripts, Path.Combine(args[1], "UnusedScripts.csv"), args[0]);
     }
 }

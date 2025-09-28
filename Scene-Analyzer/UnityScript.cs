@@ -20,15 +20,10 @@ public class UnityScript {
         ScriptDict = (yamlDeserializer.Deserialize(new StringReader(allText)) as Dictionary<object, object?>)!;
         GUID = (ScriptDict["guid"] as string)!;
         
-        Console.ForegroundColor = ConsoleColor.Blue;
         Console.WriteLine($"Loaded Unity script: {sourceFilePath}");
-        Console.ResetColor();
     }
 
     public void Print() {
-        Console.ForegroundColor = ConsoleColor.Blue;
-        Console.WriteLine($"{Name} {GUID}");
-        Console.ResetColor();
         Util.PrintDictionary(ScriptDict);
     }
 
@@ -49,16 +44,15 @@ public class UnityScript {
         }
         return fileNames;
     }
-
-    public static List<UnityScript> GetAllScripts(string rootDir) {
-        List<string> fileNames = GetAllScriptFileNames(rootDir);
+    
+    public static async Task<List<UnityScript>> GetAllScriptsAsync(string rootDir) {
+        var fileNames = GetAllScriptFileNames(rootDir);
         fileNames.Sort();
-        List<UnityScript> scripts = new List<UnityScript>();
-        
-        for (int i = 0; i < fileNames.Count; i += 2) {
-            scripts.Add(new UnityScript(fileNames[i], fileNames[i+1]));
-        }
+        // Create the script object as tasks, the result is saved in the task objects
+        var tasks = Enumerable.Range(0, fileNames.Count / 2)
+            .Select(i => Task.FromResult(new UnityScript(fileNames[2*i], fileNames[2*i + 1])));
 
-        return scripts;
+        // Wait for all tasks to finish and return the results as a list
+        return (await Task.WhenAll(tasks)).ToList();
     }
 }
