@@ -23,7 +23,7 @@ To build a self-contained executable run the following
 ```bash
 dotnet publish -c Release --self-contained true
 ```
-The executable can then be found in `JetBrains-Unity-Project-Analyzer/Application/bin/Release/net9.0/<platform>/publish/`
+The executable can then be found in `JetBrains-Unity-Project-Analyzer/Application/bin/Release/net9.0/[platform]/publish/`
 
 The executable can then be run using
 #### Linux
@@ -38,7 +38,7 @@ The executable can then be run using
 Write a console tool that analysis a Unity project directory and dumps the following information about the project:
 
 ### Primary task
-- For each scene file you need to dump scene hierarchy in a file named `<SceneName>.unity.dump`
+- For each scene file you need to dump scene hierarchy in a file named `[SceneName].unity.dump`
     ```text
     Main Camera
     Directional Light
@@ -156,3 +156,47 @@ First I analyzed the provided Unity scene files called `SampleScene.unity` and `
   - The Transform objects have fields called `m_Children` and `m_Father`, these contain a list of ID's of its children and a single ID of its father respectively. Root objects always have the ID `0` as father.
 - In Unity, Transform objects seem to form the scene hierarchy. Some Transform objects are marked as root objects through the `SceneRoots` object. Every Transform object holds the ID's of its children and parent and the GameObject it is attached to (also other information like position, rotation, scale, etc. but that is not relevant for this task).
 - Using this information, it is easier to create the scene hierarchy analyzer tool.
+
+## Solution
+My solution consisted of parsing the scenes and scripts meta files into `UnityScene` and `UnityScript` objects.
+
+These objects have member variable which is a nested dictionary (and occasionally a list) that holds the scene hierarchy read from the YAML. I used the [YamlDotNet](https://github.com/aaubry/YamlDotNet) libary for this, which was mentioned in the task description.
+
+Represented as JSON, the scene dictionary for example has a structure like this:
+```json
+{
+  "!u!4 &2118425386": {
+    "Transform": {
+      "m_ObjectHideFlags": 0,
+      "m_CorrespondingSourceObject": {
+        "fileID": 0
+      },
+      "m_PrefabInstance": {
+        "fileID": 0
+      },
+      ...
+      "m_Children": [
+        {
+          "fileID": 587334319
+        }
+      ],
+      "m_Father": {
+        "fileID": 1412475129
+      }
+    }
+  },
+  "!u!1 &1946821636": {
+    "GameObject": {
+      "m_ObjectHideFlags": 0,
+      "m_CorrespondingSourceObject": 0,
+      ...
+      "m_Name": "Child1",
+      ...
+    }
+  },
+  ...
+}
+```
+The keys are the object type and ID, and the value is the matching object, which is also a dictionary, scripts have a similar structure.
+
+In my solution I mostly use nested `TryGetValue` calls on the dictionaries to get the values from the scene that I need.
